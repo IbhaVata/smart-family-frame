@@ -133,3 +133,20 @@ The public Firebase client API key is stored as an Actions secret to keep it mas
 Hosted-runner debug APKs use an ephemeral debug certificate. Use a local build to update a locally
 signed prototype, or configure a dedicated signing key outside source control for repeatable releases.
 Deployment is separate from CI: no workflow deploys Firebase or publishes to an app store.
+
+## Stable signing (issue #10)
+
+Debug builds use a random per-machine key, so updating over a previous install fails with a
+signature mismatch. Create one project key and sign every test/release build with it:
+
+```sh
+keytool -genkeypair -v -keystore ~/smart-family-frame.jks -alias smartframe \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Store the `.jks` and its passwords in a password manager plus an offline backup; losing it means
+users must uninstall and lose local data (and blocks Play Store updates). Never commit it.
+Locally: copy `android/keystore.properties.example` to `android/keystore.properties` and fill it in.
+CI: provide `SFF_KEYSTORE_FILE` (decoded from a base64 secret), `SFF_KEYSTORE_PASSWORD`,
+`SFF_KEY_ALIAS`, `SFF_KEY_PASSWORD` as encrypted secrets. Transition: the first stable-signed build
+cannot update an install signed with the old debug key — uninstall once, re-pair, then future updates work.
