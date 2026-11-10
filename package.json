@@ -1,0 +1,56 @@
+{
+  "name": "smart-family-frame",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Smart Digital Family Frame V1 - a local, offline-first family photo frame with clock, calendar, notes, reminders and a smart scheduler.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "frame": "npm run build && vite preview",
+    "frame:acer": "node scripts/start-frame-macos.mjs",
+    "frame:acer:quick": "node scripts/start-frame-macos.mjs --no-build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run && npm run test:dst",
+    "test:watch": "vitest",
+    "icons": "node scripts/gen-icons.mjs",
+    "test:dst": "TZ=America/New_York vitest run tests/dst.torture.test.ts",
+    "firebase:emulators": "firebase emulators:start",
+    "test:rules": "firebase emulators:exec --project demo-smart-family-frame --only firestore,storage \"npm --prefix firebase-tests test\"",
+    "functions:install": "npm --prefix functions install",
+    "functions:build": "npm --prefix functions run build",
+    "functions:typecheck": "npm --prefix functions run typecheck",
+    "functions:test": "npm --prefix functions test",
+    "family:install": "npm --prefix family-app install",
+    "family:dev": "npm --prefix family-app run dev",
+    "family:build": "npm --prefix family-app run build",
+    "family:typecheck": "npm --prefix family-app run typecheck",
+    "tv:build": "node scripts/build-android-tv.mjs",
+    "tv:web": "node scripts/build-tv-web.mjs"
+  },
+  "dependencies": {
+    "firebase": "^11.10.0",
+    "idb": "^8.0.3",
+    "qrcode": "^1.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^24.13.4",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "fake-indexeddb": "^6.2.5",
+    "happy-dom": "^21.0.4",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-pwa": "^1.0.0",
+    "vitest": "^5.0.1"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.7"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "smart-family-frame-functions",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Smart Family Frame V2 \u2014 Cloud Functions (pairing, membership, photos, remote settings, WhatsApp Cloud API).",
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "main": "lib/index.js",
+  "scripts": {
+    "prebuild": "node scripts/copy-shared.mjs",
+    "build": "npm run prebuild && tsc -p tsconfig.json",
+    "build:watch": "npm run prebuild && tsc -p tsconfig.json --watch",
+    "typecheck": "npm run prebuild && tsc -p tsconfig.json --noEmit",
+    "test": "npm run prebuild && vitest run",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.1"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.7"
+  }
+}

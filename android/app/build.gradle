@@ -1,0 +1,33 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.smartfamilyframe.tv'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'com.smartfamilyframe.tv'
+        minSdk 26
+        targetSdk 36
+        versionCode 2
+        versionName '0.1.1'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildFeatures { buildConfig true }
+    buildTypes { release { minifyEnabled false } }
+    lint { abortOnError true }
+}
+dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.webkit:webkit:1.14.0'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test:rules:1.6.1'
+    androidTestImplementation 'junit:junit:4.13.2'
+}
+tasks.register('prepareFrameWeb', Exec) {
+    workingDir rootProject.projectDir.parentFile
+    commandLine 'node', 'scripts/build-tv-web.mjs'
+    // Always build so local Firebase configuration changes cannot leave stale APK assets.
+}
+tasks.named('preBuild').configure { dependsOn 'prepareFrameWeb' }

@@ -1,0 +1,7 @@
+node_modules
+/lib
+src/shared
+*.log
+.env
+.env.local
+.secret.local

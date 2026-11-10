@@ -1,0 +1,19 @@
+{
+  "name": "smart-family-frame-security-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Emulator-based Firestore/Storage security rules tests for Smart Family Frame V2. Run via `npm run test:rules` from the repo root (wraps this in `firebase emulators:exec`).",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "@types/node": "^22.10.2",
+    "firebase": "^11.10.0",
+    "vitest": "^5.0.1"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.7"
+  }
+}

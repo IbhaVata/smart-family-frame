@@ -1,0 +1,12 @@
+import { execFileSync } from 'node:child_process';
+import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const target = path.join(root, 'android/app/src/main/assets/web');
+execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build', '--', '--base=./'], { cwd: root, stdio: 'inherit' });
+rmSync(target, { recursive: true, force: true });
+mkdirSync(target, { recursive: true });
+cpSync(path.join(root, 'dist'), target, { recursive: true });
+for (const name of ['sw.js', 'registerSW.js', 'manifest.webmanifest']) rmSync(path.join(target, name), { force: true });
+console.log('Packaged the existing frame display for Android TV.');

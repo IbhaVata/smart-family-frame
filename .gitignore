@@ -1,0 +1,32 @@
+node_modules
+.frame-runtime/
+dist
+dev-dist
+.DS_Store
+*.log
+.vite
+
+# V2 — Firebase / secrets (see .env.example, FIREBASE_SETUP.md)
+.env
+.env.local
+.env.*
+!.env.example
+.firebaserc
+.env*.local
+.firebase
+firebase-export-*
+*serviceAccountKey*.json
+*service-account*.json
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log
+storage-debug.log
+database-debug.log
+extensions-debug.log
+hosting-debug.log
+
+# V2 — build artifacts of other packages (each also has its own .gitignore)
+functions/lib
+functions/src/shared
+family-app/dist

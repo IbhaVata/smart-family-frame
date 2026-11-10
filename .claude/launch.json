@@ -1,0 +1,34 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frame-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 5400
+    },
+    {
+      "name": "family-app-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "family-app",
+        "run",
+        "dev"
+      ],
+      "port": 5500
+    },
+    {
+      "name": "frame",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "frame"
+      ],
+      "port": 4400
+    }
+  ]
+}

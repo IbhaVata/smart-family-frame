@@ -1,0 +1,65 @@
+rules_version = '2';
+
+// Smart Family Frame V2 — Firebase Storage security rules.
+//
+// Layout: families/{familyId}/photos/{frameId}/{photoId}.{ext}
+// Encoding the destination frameId directly into the path (rather than only in the Firestore metadata
+// doc) lets these rules authorize a download with a single, cheap cross-service Firestore lookup on the
+// frame doc, instead of needing to read the photo's own metadata doc first. See V2_SECURITY.md.
+//
+// "Cross-service rules" (the `firestore.get(...)` calls below) require Storage and Firestore to be in
+// the SAME Firebase project's (default) database — true for every setup this project documents. See
+// FIREBASE_SETUP.md if you ever split them into separate projects.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Same lesson as firestore.rules (see its top-of-file comment): `firestore.get(path) != null` is
+    // NOT a safe existence guard — a missing document doesn't make get() return null, and touching
+    // `.data` on it throws, which can abort the whole boolean expression instead of just making that
+    // check false. Guard with `firestore.exists(path)` first, every time, even when the document is
+    // expected to exist (a real production 403 on a genuinely-valid upload was traced to this pattern
+    // in the cross-service firestore.get() calls here — see V2_SECURITY.md).
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isActiveFamilyMember(familyId) {
+      let memberPath = /databases/(default)/documents/families/$(familyId)/members/$(request.auth.uid);
+      return isSignedIn() && firestore.exists(memberPath) && firestore.get(memberPath).data.status == 'ACTIVE';
+    }
+
+    function isFrameDevice(frameId) {
+      let framePath = /databases/(default)/documents/frames/$(frameId);
+      return isSignedIn() && firestore.exists(framePath) && firestore.get(framePath).data.deviceUid == request.auth.uid;
+    }
+
+    function frameBelongsToFamily(frameId, familyId) {
+      let framePath = /databases/(default)/documents/frames/$(frameId);
+      return firestore.exists(framePath) && firestore.get(framePath).data.familyId == familyId;
+    }
+
+    function isAllowedPhoto() {
+      return request.resource.size <= 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    match /families/{familyId}/photos/{frameId}/{fileName} {
+      allow read: if isActiveFamilyMember(familyId) || (isFrameDevice(frameId) && frameBelongsToFamily(frameId, familyId));
+      // `resource == null` means no object currently exists at this path. Cloud Storage has no true
+      // in-place content replacement — re-uploading to an existing path is ALSO evaluated as `create`
+      // (not `update`; `update` only fires for metadata-only changes like setCustomMetadata), so the
+      // immutability check belongs here, not in a separate `allow update` clause (which would never
+      // actually run for a re-upload — caught by firebase-tests/storage.rules.test.ts).
+      allow create: if isActiveFamilyMember(familyId) && frameBelongsToFamily(frameId, familyId) && isAllowedPhoto() && resource == null;
+      allow update: if false; // metadata-only changes: never needed, photos are otherwise immutable
+      allow delete: if isActiveFamilyMember(familyId);
+    }
+
+    // Default deny for everything else (WhatsApp-ingested media is written server-side via the Admin
+    // SDK, which bypasses these rules, to the SAME path convention above).
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

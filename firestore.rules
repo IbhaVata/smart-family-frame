@@ -1,0 +1,211 @@
+rules_version = '2';
+
+// Smart Family Frame V2 — Firestore security rules.
+//
+// Two kinds of authenticated caller ever reach this database:
+//   1. A FAMILY USER (Google / email-link sign-in via the Family PWA) — identified by their uid, which
+//      is also the document id under families/{familyId}/members/{uid}.
+//   2. A FRAME DEVICE (anonymous sign-in from the Frame app) — identified by frames/{frameId}.deviceUid
+//      matching request.auth.uid. A Frame never has its own Firebase Auth "identity" beyond that uid.
+//
+// Every SENSITIVE write (creating a family/frame, pairing, revoking a member, creating a photo record,
+// pushing remote settings, WhatsApp linking) goes through a Cloud Function using the Admin SDK, which
+// bypasses these rules entirely and does its own caller-permission checks in code — see functions/src/.
+// These rules therefore deny most direct client writes by design; they mainly gate READS and the
+// handful of writes (albums, calendar/notes/reminders, household quick-entries) explicitly delegated to
+// direct client access. See V2_SECURITY.md for the full reasoning and the emulator test suite that
+// exercises every rule below (firebase-tests/firestore.rules.test.ts).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // IMPORTANT: `get(path) != null` does NOT safely guard a possibly-missing document — get() on a
+    // non-existent doc does not return null, and accessing `.data` on the result THROWS. That throw
+    // propagates out of `||` instead of just making that operand false (confirmed empirically against
+    // the emulator: `isFrameDevice(x) || isActiveFamilyMember(y)` denies the WHOLE read if the family
+    // doc doesn't exist for this caller, even though isFrameDevice alone would have allowed it). Every
+    // helper below therefore guards with `exists(path)` FIRST, which is the safe idiom, before ever
+    // touching `.data`. This matters here specifically because the Frame's own device identity is
+    // legitimately never a family member (no families/{id}/members/{deviceUid} doc exists for it), so
+    // isActiveFamilyMember must cleanly evaluate to false for it rather than throwing.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function memberPath(familyId) {
+      return /databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid);
+    }
+
+    function isActiveFamilyMember(familyId) {
+      return isSignedIn()
+        && exists(memberPath(familyId))
+        && get(memberPath(familyId)).data.status == 'ACTIVE';
+    }
+
+    function isFamilyOwner(familyId) {
+      return isActiveFamilyMember(familyId) && get(memberPath(familyId)).data.role == 'OWNER';
+    }
+
+    function framePath(frameId) {
+      return /databases/$(database)/documents/frames/$(frameId);
+    }
+
+    function isFrameDevice(frameId) {
+      return isSignedIn() && exists(framePath(frameId)) && get(framePath(frameId)).data.deviceUid == request.auth.uid;
+    }
+
+    function isFamilyMemberOfFrame(frameId) {
+      return exists(framePath(frameId)) && isActiveFamilyMember(get(framePath(frameId)).data.familyId);
+    }
+
+    function isFamilyOwnerOfFrame(frameId) {
+      return exists(framePath(frameId)) && isFamilyOwner(get(framePath(frameId)).data.familyId);
+    }
+
+    // A Frame's device identity is never itself a family member, but its own Settings screen legitimately
+    // needs to read who the family's members are (V2 build §19 "Connected family members"). frameDeviceIndex
+    // is a deviceUid -> {frameId, familyId} reverse lookup kept in sync by pairing.ts, letting this be a
+    // single indexed get() instead of an unsupported "scan every frame for a matching deviceUid".
+    function frameDeviceIndexPath() {
+      return /databases/$(database)/documents/frameDeviceIndex/$(request.auth.uid);
+    }
+    function isFrameDeviceOfFamily(familyId) {
+      return isSignedIn() && exists(frameDeviceIndexPath()) && get(frameDeviceIndexPath()).data.familyId == familyId;
+    }
+
+    /* ---------------- users (uid -> primary familyId pointer) ---------------- */
+
+    match /users/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow write: if false; // claimPairingCode (Admin SDK) only
+    }
+
+    /* ---------------- families ---------------- */
+
+    match /families/{familyId} {
+      allow get: if isActiveFamilyMember(familyId);
+      allow list: if false; // no "list all families" query is ever legitimate for a client
+      allow create: if false; // created by claimPairingCode (Admin SDK)
+      allow update: if isFamilyOwner(familyId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt']);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isActiveFamilyMember(familyId) || isFrameDeviceOfFamily(familyId);
+        allow write: if false; // claimPairingCode / revokeMember (Admin SDK) only
+      }
+
+      match /albums/{albumId} {
+        allow read: if isActiveFamilyMember(familyId);
+        allow create: if isActiveFamilyMember(familyId)
+          && request.resource.data.familyId == familyId
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isActiveFamilyMember(familyId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt']);
+        allow delete: if isFamilyOwner(familyId) || resource.data.createdBy == request.auth.uid;
+      }
+
+      // Financial household config (rates) and payment records: OWNER-only, both read and write —
+      // see V2_SECURITY.md "Household privacy" for the reasoning and its one documented limitation.
+      match /photos/{photoId} {
+        // Deliberately NOT `request.auth.uid == resource.data.authorizedDeviceUid` here: reading an
+        // arbitrary resource.data field that isn't part of the query's own `where` filter is unreliable
+        // for `list` evaluation in the Firestore emulator (reproducibly throws "Property
+        // authorizedDeviceUid is undefined" even when the real document has it set — caught by the
+        // Frame's live photoSync smoke test). isFrameDevice() sidesteps this by cross-checking against
+        // the frame doc via get() instead, the same proven pattern every sibling subcollection uses.
+        allow read: if isActiveFamilyMember(familyId) || (isFrameDevice(resource.data.frameId) && get(framePath(resource.data.frameId)).data.familyId == familyId);
+        allow create, update: if false; // createPhotoRecord / confirmPhotoSynced (Admin SDK) only
+        allow delete: if isFamilyOwner(familyId) || (isActiveFamilyMember(familyId) && resource.data.uploadedBy == request.auth.uid);
+      }
+    }
+
+    /* ---------------- frames ---------------- */
+
+    match /frames/{frameId} {
+      // `list` (not just `get`) must be allowed here: the Family PWA's multi-frame support (§26) runs
+      // `query(collection('frames'), where('familyId','==', myFamilyId))` on every screen that shows a
+      // Frame picker (Home, Frames, Send Photos). An earlier `list: if false` here silently broke every
+      // one of those screens even though pairing itself succeeded — caught by the family-app live
+      // emulator smoke test (see V2_PHONE_TEST.md). This rule intentionally reads `resource.data`
+      // directly instead of `isFrameDevice(frameId)` / `isFamilyMemberOfFrame(frameId)` (which
+      // re-`get()` this SAME document by id): that self-referential get() is redundant here — `resource`
+      // already IS this document for both `get` and `list` — and the Firestore emulator's rule
+      // evaluator throws a "Null value error" on it specifically during `list` evaluation. Using
+      // `resource.data` avoids the extra read entirely and sidesteps the emulator quirk.
+      allow read: if isSignedIn() && (resource.data.deviceUid == request.auth.uid || isActiveFamilyMember(resource.data.familyId));
+      allow write: if false; // createPairingCode / frameHeartbeat / disconnectFrame (Admin SDK) only
+
+      match /calendarEvents/{id} {
+        allow read: if isFrameDevice(frameId) || isFamilyMemberOfFrame(frameId);
+        allow write: if isFamilyMemberOfFrame(frameId);
+      }
+      match /notes/{id} {
+        allow read: if isFrameDevice(frameId) || isFamilyMemberOfFrame(frameId);
+        allow write: if isFamilyMemberOfFrame(frameId);
+      }
+      match /reminders/{id} {
+        allow read: if isFrameDevice(frameId) || isFamilyMemberOfFrame(frameId);
+        allow write: if isFamilyMemberOfFrame(frameId);
+      }
+      // Quick daily entries (attendance/delivery): any active member, per V2 build §16/§42.
+      match /householdEntries/{id} {
+        allow read: if isFrameDevice(frameId) || isFamilyMemberOfFrame(frameId);
+        allow write: if isFamilyMemberOfFrame(frameId);
+      }
+      // Service definitions (rates, vendor terms) and payment records: OWNER-only — §43 "restrict full
+      // financial details to OWNER by default". Documented limitation: PER_UNIT/CUSTOM entries in
+      // householdEntries above can still carry a per-entry `amount`, which members can read/write since
+      // that collection is member-open; a fully field-level split is a documented future refinement,
+      // see V2_SECURITY.md.
+      match /householdServices/{id} {
+        allow read: if isFrameDevice(frameId) || isFamilyOwnerOfFrame(frameId);
+        allow write: if isFamilyOwnerOfFrame(frameId);
+      }
+      match /householdServiceSettings/{id} {
+        allow read: if isFrameDevice(frameId) || isFamilyOwnerOfFrame(frameId);
+        allow write: if isFamilyOwnerOfFrame(frameId);
+      }
+      match /householdPayments/{id} {
+        allow read: if isFrameDevice(frameId) || isFamilyOwnerOfFrame(frameId);
+        allow write: if isFamilyOwnerOfFrame(frameId);
+      }
+      match /remoteSettings/{docId} {
+        allow read: if isFrameDevice(frameId) || isFamilyMemberOfFrame(frameId);
+        allow write: if false; // updateFrameSettings (Admin SDK) only — validates the safe-field whitelist server-side
+      }
+    }
+
+    /* ---------------- pairing & WhatsApp linking (server-managed) ---------------- */
+
+    match /pairingCodes/{code} {
+      // Only the Frame that generated this code may watch it, to learn the moment it is claimed.
+      allow get: if resource.data.frameId != null && isFrameDevice(resource.data.frameId);
+      allow list: if false;
+      allow write: if false; // createPairingCode / claimPairingCode (Admin SDK) only
+    }
+
+    match /whatsappLinkCodes/{code} {
+      allow read, write: if false; // createWhatsAppLinkCode returns the code directly; never read back by clients
+    }
+
+    match /whatsappSenders/{waId} {
+      allow read, write: if false; // webhook + linking functions only
+    }
+
+    match /whatsappProcessedMessages/{messageId} {
+      allow read, write: if false; // webhook idempotency ledger only
+    }
+
+    match /frameDeviceIndex/{deviceUid} {
+      allow read, write: if false; // pairing.ts / membership.ts (Admin SDK) only — read indirectly via isFrameDeviceOfFamily()
+    }
+
+    /* ---------------- default deny ---------------- */
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

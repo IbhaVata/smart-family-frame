@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Smart Family Frame</string>
+    <string name="settings_unavailable">Open your TV settings and look for Screen saver or Ambient mode to select Smart Family Frame.</string>
+</resources>
