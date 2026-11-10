@@ -13,7 +13,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions/v2';
 import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import { db, storage } from '../lib/admin.js';
-import { WHATSAPP_ACCESS_TOKEN, WHATSAPP_APP_SECRET, WHATSAPP_WEBHOOK_VERIFY_TOKEN } from './config.js';
+import { WHATSAPP_APP_SECRET, WHATSAPP_WEBHOOK_VERIFY_TOKEN } from './config.js';
 import { getMetaMediaInfo, downloadMetaMedia, sendWhatsAppText } from './metaClient.js';
 import { parseWhatsAppCommand, HELP_TEXT } from './commands.js';
 import { createPhotoRecordInternal } from '../photos.js';
@@ -162,7 +162,7 @@ async function resolveDefaultOrFail(sender: WhatsAppSender): Promise<string> {
 }
 
 export const whatsappWebhook = onRequest(
-  { secrets: [WHATSAPP_ACCESS_TOKEN, WHATSAPP_APP_SECRET, WHATSAPP_WEBHOOK_VERIFY_TOKEN], cors: false },
+  { cors: false },
   async (request, response) => {
     if (request.method === 'GET') {
       const mode = request.query['hub.mode'];
