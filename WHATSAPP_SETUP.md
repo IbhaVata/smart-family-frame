@@ -9,6 +9,10 @@ API) — never a personal WhatsApp number, never an unofficial/scraping library.
 has never used Meta's developer tools before. Do FIREBASE_SETUP.md's Part B first — you need a deployed
 `whatsappWebhook` Cloud Function URL before starting here.
 
+The access token, app secret and webhook verify token are plain Functions params stored in
+`functions/.env.<project-id>` (gitignored), not Secret Manager — so deploying functions never requires
+Google Cloud Billing to be enabled.
+
 ## 1. Create a Meta Developer account and app
 
 1. Go to https://developers.facebook.com and click **Get Started** (sign in with a Facebook account, or
@@ -40,17 +44,17 @@ has never used Meta's developer tools before. Do FIREBASE_SETUP.md's Part B firs
    (needed in step 6), then follow Meta's **System User** flow (**Business Settings → Users → System
    Users → Add** → assign it the WhatsApp app with `whatsapp_business_messaging` permission → **Generate
    token**, no expiration). Copy that token.
-3. Store it as a secret (never in a file in this repo):
-   ```bash
-   firebase functions:secrets:set WHATSAPP_ACCESS_TOKEN
+3. Put it in `functions/.env.<project-id>` (gitignored, never committed):
    ```
-   Paste the token when prompted.
+   WHATSAPP_ACCESS_TOKEN=<the token you copied>
+   ```
 
 ## 5. Set the webhook
 
-1. Decide on a **verify token** — any random string you make up (e.g. a long password). Store it:
-   ```bash
-   firebase functions:secrets:set WHATSAPP_WEBHOOK_VERIFY_TOKEN
+1. Decide on a **verify token** — any random string you make up (e.g. a long password). Put it in the
+   same `functions/.env.<project-id>` file:
+   ```
+   WHATSAPP_WEBHOOK_VERIFY_TOKEN=<your random string>
    ```
 2. Get your deployed webhook URL — it's printed after `firebase deploy --only functions`, or find it at
    **Firebase Console → Functions → whatsappWebhook → Trigger URL**. It looks like
@@ -65,13 +69,13 @@ has never used Meta's developer tools before. Do FIREBASE_SETUP.md's Part B firs
 ## 6. Get your App Secret
 
 1. **App settings → Basic → App Secret → Show**.
-2. Store it:
-   ```bash
-   firebase functions:secrets:set WHATSAPP_APP_SECRET
+2. Add it to the same `functions/.env.<project-id>` file:
+   ```
+   WHATSAPP_APP_SECRET=<the secret you copied>
    ```
    This is what the webhook uses to verify every incoming message really came from Meta (see
    V2_SECURITY.md).
-3. Redeploy functions once more so they pick up all three secrets:
+3. Redeploy functions once more so they pick up all three values:
    ```bash
    firebase deploy --only functions
    ```

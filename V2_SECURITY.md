@@ -79,9 +79,10 @@ rule — see V2_ARCHITECTURE.md §6.
 - **Unknown senders** get a generic rejection that never reveals a Frame id, family name, or any other
   detail (§54) — the only way an unlinked number can do anything is send `LINK <code>`.
 - **Secrets never reach the browser**: the Meta access token, app secret and webhook verify token are
-  Firebase Functions v2 secrets (`firebase functions:secrets:set`), stored encrypted in Secret Manager,
-  referenced only from `functions/src/whatsapp/config.ts`. They are never included in the Family PWA or
-  Frame app's client bundles.
+  Firebase Functions params read from `functions/.env.<project-id>` (gitignored, plain text on disk —
+  not Secret Manager, so deploy does not require Cloud Billing), referenced only from
+  `functions/src/whatsapp/config.ts`. They are never included in the Family PWA or Frame app's client
+  bundles.
 
 ## Cloud optionality as a security/reliability property
 
