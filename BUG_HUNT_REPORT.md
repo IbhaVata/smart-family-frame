@@ -17,6 +17,10 @@
 - The phone deleted storage before checking metadata-delete permission. Metadata authorization now
   happens first, and failures are reported. A failed storage cleanup is distinguished from a successful
   library removal. An offline TV applies that removal on its next authenticated server sync.
+- Storage previously let any active member delete another uploader's bytes even though metadata
+  deletion was owner/uploader-only. New uploads carry validated, immutable uploader attribution;
+  byte deletion now requires the owner or that active uploader. Legacy files without attribution
+  require the family owner for storage cleanup; removing their library record still reaches the TV.
 - Remote reminder text changes/reconnects reset local trigger memory, allowing duplicate alerts.
   The prior trigger survives if it is still an occurrence of the updated rule.
 - Revoked uploaders could delete their old metadata through a stale identity. Active membership is now

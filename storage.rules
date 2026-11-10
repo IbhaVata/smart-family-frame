@@ -34,6 +34,16 @@ service firebase.storage {
       return isSignedIn() && firestore.exists(framePath) && firestore.get(framePath).data.deviceUid == request.auth.uid;
     }
 
+    function isFamilyOwner(familyId) {
+      let memberPath = /databases/(default)/documents/families/$(familyId)/members/$(request.auth.uid);
+      return isActiveFamilyMember(familyId) && firestore.get(memberPath).data.role == 'OWNER';
+    }
+
+    function validUploaderMetadata() {
+      // Missing attribution is accepted for older clients; only the owner can clean up those bytes.
+      return !('uploadedBy' in request.resource.metadata) || request.resource.metadata.uploadedBy == request.auth.uid;
+    }
+
     function frameBelongsToFamily(frameId, familyId) {
       let framePath = /databases/(default)/documents/frames/$(frameId);
       return firestore.exists(framePath) && firestore.get(framePath).data.familyId == familyId;
@@ -51,9 +61,9 @@ service firebase.storage {
       // (not `update`; `update` only fires for metadata-only changes like setCustomMetadata), so the
       // immutability check belongs here, not in a separate `allow update` clause (which would never
       // actually run for a re-upload — caught by firebase-tests/storage.rules.test.ts).
-      allow create: if isActiveFamilyMember(familyId) && frameBelongsToFamily(frameId, familyId) && isAllowedPhoto() && resource == null;
+      allow create: if isActiveFamilyMember(familyId) && frameBelongsToFamily(frameId, familyId) && isAllowedPhoto() && validUploaderMetadata() && resource == null;
       allow update: if false; // metadata-only changes: never needed, photos are otherwise immutable
-      allow delete: if isActiveFamilyMember(familyId);
+      allow delete: if isFamilyOwner(familyId) || (isActiveFamilyMember(familyId) && 'uploadedBy' in resource.metadata && resource.metadata.uploadedBy == request.auth.uid);
     }
 
     // Default deny for everything else (WhatsApp-ingested media is written server-side via the Admin

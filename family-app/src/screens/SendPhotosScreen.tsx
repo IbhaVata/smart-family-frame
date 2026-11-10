@@ -53,7 +53,9 @@ export function SendPhotosScreen({ onSent }: { onSent: () => void }) {
         const fileId = crypto.randomUUID();
         const storagePath = `families/${familyId}/photos/${frameId}/${fileId}.${ext}`;
         setQueue((q) => q.map((x, idx) => (idx === i ? { ...x, status: 'uploading' } : x)));
-        await uploadBytes(ref(storage, storagePath), optimized.blob, { contentType: optimized.blob.type || item.file.type });
+        await uploadBytes(ref(storage, storagePath), optimized.blob, {
+          contentType: optimized.blob.type || item.file.type, customMetadata: { uploadedBy: uid },
+        });
         await createPhotoRecord({
           familyId, frameId, albumId: albumId || null, storagePath,
           filename: item.file.name, mimeType: optimized.blob.type || item.file.type, size: optimized.blob.size,

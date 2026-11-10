@@ -141,11 +141,28 @@ describe('families/{familyId}/photos/{frameId}/{fileName} — update/delete', ()
     await assertFails(uploadBytes(ref(storage, path), smallJpeg, { contentType: 'image/jpeg' }));
   });
 
-  it('an active family member can delete a photo', async () => {
+  it('the active uploader can delete their own attributed photo', async () => {
     const env = await getTestEnv();
     const path = `families/${FAM1}/photos/${FRAME1}/deleteme.jpg`;
-    await env.withSecurityRulesDisabled(async (ctx) => uploadBytes(ref(ctx.storage(), path), smallJpeg, { contentType: 'image/jpeg' }));
+    await env.withSecurityRulesDisabled(async (ctx) => uploadBytes(ref(ctx.storage(), path), smallJpeg, { contentType: 'image/jpeg', customMetadata: { uploadedBy: MEMBER1 } }));
     const storage = env.authenticatedContext(MEMBER1).storage();
     await assertSucceeds(deleteObject(ref(storage, path)));
+  });
+  it('a member cannot delete another member’s bytes even if they know the object path', async () => {
+    const env = await getTestEnv();
+    const path = `families/${FAM1}/photos/${FRAME1}/another-upload.jpg`;
+    await env.withSecurityRulesDisabled(async (ctx) => uploadBytes(ref(ctx.storage(), path), smallJpeg, { contentType: 'image/jpeg', customMetadata: { uploadedBy: OWNER1 } }));
+    await assertFails(deleteObject(ref(env.authenticatedContext(MEMBER1).storage(), path)));
+  });
+  it('the owner can clean up legacy files without uploader attribution', async () => {
+    const env = await getTestEnv();
+    const path = `families/${FAM1}/photos/${FRAME1}/legacy.jpg`;
+    await env.withSecurityRulesDisabled(async (ctx) => uploadBytes(ref(ctx.storage(), path), smallJpeg, { contentType: 'image/jpeg' }));
+    await assertSucceeds(deleteObject(ref(env.authenticatedContext(OWNER1).storage(), path)));
+  });
+  it('a member cannot forge another uploader’s attribution', async () => {
+    const env = await getTestEnv();
+    const path = `families/${FAM1}/photos/${FRAME1}/forged.jpg`;
+    await assertFails(uploadBytes(ref(env.authenticatedContext(MEMBER1).storage(), path), smallJpeg, { contentType: 'image/jpeg', customMetadata: { uploadedBy: OWNER1 } }));
   });
 });
