@@ -129,4 +129,7 @@ No existing Mac/phone data, backend rules, deployed services, or prior uncommitt
 CI runs web/phone/backend checks, Firebase permission tests, Android TV emulator tests, dependency
 audits at high severity, and a credential scan. GitHub builds use public Firebase client configuration
 from repository Actions variables. Without those variables the APK works locally but cannot pair.
+The public Firebase client API key is stored as an Actions secret to keep it masked in build logs.
+Hosted-runner debug APKs use an ephemeral debug certificate. Use a local build to update a locally
+signed prototype, or configure a dedicated signing key outside source control for repeatable releases.
 Deployment is separate from CI: no workflow deploys Firebase or publishes to an app store.
