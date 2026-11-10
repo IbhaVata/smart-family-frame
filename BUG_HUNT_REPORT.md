@@ -12,6 +12,10 @@
   server snapshots may prune cloud-mapped copies. Cached empty snapshots cannot erase offline media.
 - Photo download/removal races could restore a deleted image. Work is scoped to the active mirror,
   retry timers cancel, and the latest authoritative library controls whether a download may commit.
+- A prolonged outage could exhaust photo retries permanently. Attempts are now bounded per active
+  session; a fresh authenticated connection can recover an earlier failed download.
+- A stalled network download could delay unrelated photo removals. Authoritative removals now use a
+  separate local transaction queue and do not wait for network downloads.
 - A crash between saving media and saving its cloud mapping could leave an orphan or duplicate.
   Photo metadata, bytes, thumbnail and mapping now commit in one local database transaction.
 - The phone deleted storage before checking metadata-delete permission. Metadata authorization now

@@ -2,7 +2,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initBackend, getBackend, ALL_STORES } from '../src/storage/backend';
-import { cloudPhotoMapRepo, photoRepo } from '../src/storage/repositories';
+import { cloudPhotoMapRepo, photoRepo, syncQueueRepo } from '../src/storage/repositories';
 import { photosStore } from '../src/app/stores';
 import { startPhotoSync } from '../src/cloud/photoSync';
 import type { CloudPhoto } from '../shared/types';
@@ -28,6 +28,29 @@ beforeEach(async () => {
 afterEach(() => { stop?.(); });
 
 describe('cloud photo mirror', () => {
+  it('recovers a download that exhausted retries in an earlier offline session', async () => {
+    await syncQueueRepo.put({ id: 'photo:one', domain: 'photo', op: 'create', direction: 'inbox',
+      payload: { photoId: 'one', cloud: source('one'), retryRevision: 3 }, attempts: 6,
+      lastError: 'Network unavailable', status: 'failed', createdAt: 1, updatedAt: 1 });
+    emit(['one']);
+    await vi.waitFor(async () => {
+      expect((await cloudPhotoMapRepo.list()).length).toBe(1);
+      expect(await syncQueueRepo.get('photo:one')).toBeUndefined();
+    });
+  });
+  it('applies removal promptly while an unrelated download is stalled', async () => {
+    emit(['cached']);
+    await vi.waitFor(async () => expect((await cloudPhotoMapRepo.list()).length).toBe(1));
+    let finish!: (bytes: ArrayBuffer) => void;
+    mocks.getBytes.mockImplementationOnce(() => new Promise<ArrayBuffer>((resolve) => { finish = resolve; }));
+    emit(['cached', 'waiting']);
+    await vi.waitFor(() => expect(mocks.getBytes).toHaveBeenCalledTimes(2));
+    try {
+      emit(['waiting']);
+      await vi.waitFor(async () => expect(await cloudPhotoMapRepo.get('cached')).toBeUndefined());
+    } finally { finish(new Uint8Array([255, 216, 255]).buffer); }
+    await vi.waitFor(async () => expect((await cloudPhotoMapRepo.list()).map((m) => m.cloudPhotoId)).toEqual(['waiting']));
+  });
   it('removes cached files and mapping when a server photo is deleted', async () => {
     emit(['one']); await vi.waitFor(async () => expect((await photoRepo.list()).length).toBe(1));
     const mapping = (await cloudPhotoMapRepo.list())[0]!;

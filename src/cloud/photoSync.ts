@@ -33,8 +33,10 @@ export async function startPhotoSync(db: Firestore, storage: FirebaseStorage, fa
   let active = true;
   let serverIds: Set<string> | null = null;
   let pending = Promise.resolve();
+  let removals = Promise.resolve();
   const records = new Map<string, CloudPhoto>();
   const queued = new Set<string>();
+  const attemptsThisSession = new Map<string, number>();
   const retries = new Map<string, ReturnType<typeof setTimeout>>();
   const allowed = (id: string) => active && (serverIds === null || serverIds.has(id));
   const sameScope = (map: CloudPhotoMap) => (!map.familyId || map.familyId === familyId) && (!map.frameId || map.frameId === frameId);
@@ -76,9 +78,8 @@ export async function startPhotoSync(db: Firestore, storage: FirebaseStorage, fa
     try {
       if (cloud.familyId !== familyId || cloud.frameId !== frameId || !Number.isFinite(cloud.size) || cloud.size <= 0 || cloud.size > MAX_PHOTO_BYTES
         || !(ALLOWED_PHOTO_MIME_TYPES as readonly string[]).includes(cloud.mimeType)) throw new Error('Unsupported cloud photo metadata.');
-      const [already, previous] = await Promise.all([cloudPhotoMapRepo.get(photoId), syncQueueRepo.get(queueId)]);
+      const already = await cloudPhotoMapRepo.get(photoId);
       if (!allowed(photoId) || already) return;
-      if (previous?.status === 'failed' && (previous.payload as { retryRevision?: number })?.retryRevision === RETRY_REVISION) return;
       let bytes: ArrayBuffer;
       try { bytes = await getBytes(ref(storage, cloud.storagePath), MAX_PHOTO_BYTES); }
       catch (error) {
@@ -115,22 +116,28 @@ export async function startPhotoSync(db: Firestore, storage: FirebaseStorage, fa
       if (!allowed(photoId)) return;
       const previous = await syncQueueRepo.get(queueId);
       if (!allowed(photoId)) return;
-      const sameRevision = (previous?.payload as { retryRevision?: number } | undefined)?.retryRevision === RETRY_REVISION;
-      const attempts = (sameRevision ? previous?.attempts ?? 0 : 0) + 1;
+      // Bound retries within one active session, but allow a fresh authenticated connection to
+      // recover a photo that failed during an earlier, prolonged outage.
+      const attempts = (attemptsThisSession.get(photoId) ?? 0) + 1;
+      attemptsThisSession.set(photoId, attempts);
       await syncQueueRepo.put({ id: queueId, domain: 'photo', op: 'create', direction: 'inbox',
         payload: { photoId, cloud, retryRevision: RETRY_REVISION }, attempts,
         lastError: error instanceof Error ? error.message : 'Photo download failed.',
         status: attempts >= MAX_ATTEMPTS ? 'failed' : 'pending', createdAt: previous?.createdAt ?? Date.now(), updatedAt: Date.now() });
+      if (active && !allowed(photoId)) { await syncQueueRepo.remove(queueId); return; }
       if (allowed(photoId) && attempts < MAX_ATTEMPTS) {
         const timer = setTimeout(() => { retries.delete(photoId); schedule(photoId); }, Math.min(300_000, 5_000 * 2 ** (attempts - 1)));
         const old = retries.get(photoId); if (old) clearTimeout(old);
         retries.set(photoId, timer);
+      } else if (allowed(photoId)) {
+        toast('Photo download interrupted. Reconnecting to retry.', 'error');
+        onError?.(error);
       }
     }
   }
 
   function schedule(id: string) {
-    if (queued.has(id) || retries.has(id) || !allowed(id)) return;
+    if (queued.has(id) || retries.has(id) || !allowed(id) || (attemptsThisSession.get(id) ?? 0) >= MAX_ATTEMPTS) return;
     const cloud = records.get(id);
     if (!cloud) return;
     queued.add(id);
@@ -143,7 +150,10 @@ export async function startPhotoSync(db: Firestore, storage: FirebaseStorage, fa
       if (!snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites) {
         serverIds = new Set(snapshot.docs.map((document) => document.id));
         for (const [id, timer] of retries) if (!serverIds.has(id)) { clearTimeout(timer); retries.delete(id); }
-        enqueue(reconcileRemovals);
+        // Deletions must not wait behind an unrelated slow network download. Local transactions
+        // remain ordered, and allowed() prevents an in-flight removed photo from being restored.
+        removals = removals.then(async () => { if (active) await reconcileRemovals(); })
+          .catch((error) => { if (active) onError?.(error); });
       }
       for (const document of snapshot.docs) { records.set(document.id, document.data() as CloudPhoto); schedule(document.id); }
     }, (error) => {
