@@ -15,7 +15,27 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
     buildFeatures { buildConfig true }
-    buildTypes { release { minifyEnabled false } }
+    // Stable signing (issue #10). Credentials come from android/keystore.properties (gitignored)
+    // or SFF_KEYSTORE_* environment variables (CI secrets). Without them, the default debug key is used.
+    def keystoreProps = new Properties()
+    def keystoreFile = rootProject.file('keystore.properties')
+    if (keystoreFile.exists()) keystoreFile.withInputStream { keystoreProps.load(it) }
+    def signingValue = { String prop, String env -> System.getenv(env) ?: keystoreProps.getProperty(prop) }
+    def storePath = signingValue('storeFile', 'SFF_KEYSTORE_FILE')
+    if (storePath) {
+        signingConfigs {
+            stable {
+                storeFile rootProject.file(storePath).isAbsolute() ? file(storePath) : rootProject.file(storePath)
+                storePassword signingValue('storePassword', 'SFF_KEYSTORE_PASSWORD')
+                keyAlias signingValue('keyAlias', 'SFF_KEY_ALIAS')
+                keyPassword signingValue('keyPassword', 'SFF_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; if (storePath) signingConfig signingConfigs.stable }
+        debug { if (storePath) signingConfig signingConfigs.stable }
+    }
     lint { abortOnError true }
 }
 dependencies {

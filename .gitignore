@@ -30,3 +30,8 @@ hosting-debug.log
 functions/lib
 functions/src/shared
 family-app/dist
+
+# Android signing material (never commit)
+android/keystore.properties
+*.jks
+*.keystore
