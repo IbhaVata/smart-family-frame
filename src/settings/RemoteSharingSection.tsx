@@ -22,7 +22,9 @@ const STATUS_CHIP_CLASS: Record<string, string> = {
   error: 'danger',
 };
 
-function PairingCard() {
+/** Shows a pairing code + QR. With `auto`, it generates one immediately and replaces it before it
+ *  expires, so an unpaired TV simply always shows a scannable code — no menu to find, no button. */
+export function PairingCard({ auto = false }: { auto?: boolean } = {}) {
   const [pending, setPending] = useState<{ code: string; expiresAt: number } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [claimed, setClaimed] = useState(false);
@@ -83,8 +85,9 @@ function PairingCard() {
           toast(`Connected to ${r.familyName}.`, 'success');
           void restartSyncEngine();
         } else if (r.status === 'expired') {
-          setError('That code expired. Generate a new one.');
           setPending(null);
+          if (auto) void start();
+          else setError('That code expired. Generate a new one.');
         } else {
           setError(r.message);
         }
@@ -96,11 +99,20 @@ function PairingCard() {
     }
   };
 
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!auto || autoStarted.current) return; // generate once per mount, even under StrictMode
+    autoStarted.current = true;
+    void start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (claimed) return <p className="form-info">Connected! This Frame is now part of your family.</p>;
 
   return (
     <div className="stack">
-      {!pending && (
+      {!pending && auto && !error && <p className="muted">Preparing your code…</p>}
+      {!pending && (!auto || error) && (
         <Button variant="primary" onClick={() => void start()} disabled={busy}>
           {busy ? 'Generating…' : 'Connect family'}
         </Button>
@@ -109,7 +121,7 @@ function PairingCard() {
         <div className="stack" style={{ alignItems: 'center', textAlign: 'center' }}>
           <div style={{ fontSize: 36, fontWeight: 700, letterSpacing: 4 }}>{pending.code}</div>
           <p className="muted small">
-            Open the Family app on a phone, choose <strong>Pair frame</strong> and enter this code — or scan the QR below.
+            Scan this QR code with your phone camera — or open the Family app and enter the code.
             Expires in {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}.
           </p>
           {qrDataUrl && <img src={qrDataUrl} alt="Pairing QR code" width={180} height={180} style={{ borderRadius: 8, background: '#fff', padding: 8 }} />}

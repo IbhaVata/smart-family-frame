@@ -210,6 +210,14 @@ describe('server-only collections are never directly readable or writable', () =
     await assertFails(env.authenticatedContext(OWNER1).firestore().doc('whatsappLinkCodes/482913').get());
     await assertFails(env.authenticatedContext(OWNER1).firestore().doc('whatsappProcessedMessages/wamid.abc').get());
   });
+
+  it('familyInvites cannot be read, listed or forged by clients (only the invite callables touch them)', async () => {
+    const env = await getTestEnv();
+    const db = env.authenticatedContext(OWNER1).firestore();
+    await assertFails(db.doc('familyInvites/abcdefghijklmnopqrstuv').get());
+    await assertFails(db.collection('familyInvites').get());
+    await assertFails(db.doc('familyInvites/abcdefghijklmnopqrstuv').set({ familyId: 'fam1', expiresAt: Date.now() + 1e9 }));
+  });
 });
 
 describe('list/query operations (not just single-doc get) — regression coverage for a real bug class', () => {

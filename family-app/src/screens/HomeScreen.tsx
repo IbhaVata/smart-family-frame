@@ -124,7 +124,7 @@ export function HomeScreen({ push }: { push: (s: ScreenName) => void }) {
           <button className="btn btn-sm" onClick={() => push('albums')}>Albums</button>
           <button className="btn btn-sm" onClick={() => push('notes')}>Notes</button>
           <button className="btn btn-sm" onClick={() => push('reminders')}>Reminders</button>
-          <button className="btn btn-sm" onClick={() => push('members')}>Members</button>
+          <button className="btn btn-sm" onClick={() => push('members')}>Invite family</button>
           <button className="btn btn-sm" onClick={() => push('frames')}>Frames</button>
         </div>
       </div>

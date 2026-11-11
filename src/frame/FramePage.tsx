@@ -8,6 +8,7 @@ import { eventsOnDay } from '@/calendar/calendarLogic';
 import { frameNotes } from '@/notes/notesLogic';
 import { formatClockTime } from '@/utils/time';
 import { display } from '@/services/display/DisplayController';
+import { ConnectPhonePrompt } from '@/settings/ConnectPhonePrompt';
 
 export function FramePage() {
   const settings = useStore(settingsStore);
@@ -41,6 +42,7 @@ export function FramePage() {
           <FrameContent />
         </div>
         <div className="stack">
+          <ConnectPhonePrompt />
           <div className="card">
             <div className="section-title">Now showing</div>
             <div className="row" style={{ marginTop: 8 }}>

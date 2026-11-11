@@ -80,6 +80,19 @@ export interface FrameDeviceIndexEntry {
 
 export const PAIRING_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 export const WHATSAPP_LINK_CODE_TTL_MS = 10 * 60 * 1000;
+/** Family invite links are shared over WhatsApp and may be opened days later. The token is long and
+ *  random (not a 6-digit code), so a longer life does not make it guessable. */
+export const FAMILY_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface FamilyInvite {
+  token: string;
+  familyId: string;
+  familyName: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: number;
+  expiresAt: number;
+}
 
 export interface PairingCode {
   code: string;

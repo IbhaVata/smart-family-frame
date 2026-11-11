@@ -187,6 +187,10 @@ service cloud.firestore {
       allow write: if false; // createPairingCode / claimPairingCode (Admin SDK) only
     }
 
+    match /familyInvites/{token} {
+      allow read, write: if false; // only createFamilyInvite / claimFamilyInvite (Admin SDK) touch these
+    }
+
     match /whatsappLinkCodes/{code} {
       allow read, write: if false; // createWhatsAppLinkCode returns the code directly; never read back by clients
     }
