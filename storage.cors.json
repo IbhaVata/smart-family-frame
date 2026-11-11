@@ -1,0 +1,15 @@
+[
+  {
+    "origin": [
+      "https://smart-family-frame-proto.web.app",
+      "https://smart-family-frame-proto.firebaseapp.com",
+      "https://sff-frame-test.web.app",
+      "https://appassets.androidplatform.net",
+      "http://localhost:5173",
+      "http://localhost:4173"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Length", "Content-Range", "Range"],
+    "maxAgeSeconds": 3600
+  }
+]

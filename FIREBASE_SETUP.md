@@ -186,7 +186,18 @@ App Check helps stop unauthorized clients from calling your Functions/Firestore/
 site-key steps. This project's code does not yet wire in the App Check SDK — treat this as a documented
 follow-up before a public launch, not a blocker for family use.
 
-### 13. You're done
+### 13. Allow the Frame to download photos directly (Storage CORS)
+
+Browsers, including the Android TV WebView (origin `https://appassets.androidplatform.net`), block
+direct photo downloads from a bucket with no CORS config. The Frame then waits about 15 s per photo
+before falling back to the much slower `getPhotoDownloadUrl` function. Apply `storage.cors.json`
+once (add your own Hosting origins to it first):
+
+```bash
+gcloud storage buckets update gs://<your-project>.firebasestorage.app --cors-file=storage.cors.json
+```
+
+### 14. You're done
 
 Open your Hosting URL on a phone, sign in, and pair it with the Frame's code from
 **Settings → Remote Sharing**. See V2_PHONE_TEST.md for the full walkthrough.
