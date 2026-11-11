@@ -193,14 +193,14 @@ export function RemoteSharingSection() {
             </>
           )}
 
-          {(state.status === 'not_paired' || state.status === 'connected') && (
-            <div style={{ padding: '14px 0', borderTop: '1px solid var(--line)' }}>
-              <div className="setting-title" style={{ marginBottom: 10 }}>
-                {state.status === 'connected' ? 'Pair another member' : 'Connect family'}
-              </div>
-              <PairingCard />
+          {/* Keep the card mounted through every status: generating a code restarts sync, which passes
+              through 'connecting'. Unmounting here used to discard the freshly generated code. */}
+          <div style={{ padding: '14px 0', borderTop: '1px solid var(--line)' }}>
+            <div className="setting-title" style={{ marginBottom: 10 }}>
+              {state.status === 'connected' ? 'Pair another member' : 'Connect family'}
             </div>
-          )}
+            <PairingCard />
+          </div>
 
           {state.status === 'connected' && (
             <div className="setting">
