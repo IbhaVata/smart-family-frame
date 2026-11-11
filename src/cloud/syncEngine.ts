@@ -188,7 +188,8 @@ async function connect(attempt: SyncAttempt): Promise<void> {
   attempt.own(startHeartbeat(functions, frameId));
   attempt.own(await watchFamilyMembers(db, familyId));
   attempt.check();
-  void seedLocalHouseholdOutbox().catch(failure);
+  // The outbox retries on its own; an IndexedDB hiccup here must not tear down every listener.
+  void seedLocalHouseholdOutbox().catch((error) => console.error('[sync] household outbox seed failed', error));
   void refreshPendingCount();
   const pendingTimer = setInterval(() => void refreshPendingCount(), 60_000);
   attempt.own(() => clearInterval(pendingTimer));
@@ -199,7 +200,12 @@ const lifecycle = createSyncLifecycle(connect, (error) => {
   remoteSharingStore.set((s) => ({ ...s, status: 'offline', errorMessage: error instanceof Error ? error.message : 'Sync will retry.' }));
 });
 let listening = false;
-function online() { void lifecycle.restart(); void flushHouseholdOutbox(); }
+function online() {
+  // Firestore reconnects healthy listeners itself; a full restart re-reads every collection, which on
+  // flapping Wi-Fi costs reads and IndexedDB writes many times a day.
+  if (remoteSharingStore.get().status !== 'connected') void lifecycle.restart();
+  void flushHouseholdOutbox();
+}
 function offline() { remoteSharingStore.set((s) => ({ ...s, status: 'offline' })); }
 
 export function startSyncEngine(): Promise<void> {

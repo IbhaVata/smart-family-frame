@@ -33,8 +33,9 @@ async function claimMessageOnce(messageId: string): Promise<boolean> {
   try {
     await db.doc(`whatsappProcessedMessages/${messageId}`).create({ processedAt: Date.now() });
     return true;
-  } catch {
-    return false; // already exists -> already processed
+  } catch (e) {
+    if ((e as { code?: number }).code === 6) return false; // ALREADY_EXISTS -> a Meta retry
+    throw e;
   }
 }
 
@@ -51,7 +52,9 @@ async function familyFrames(familyId: string): Promise<CloudFrame[]> {
 async function resolveTargetFrame(sender: WhatsAppSender): Promise<{ frame: CloudFrame } | { error: string }> {
   if (sender.defaultFrameId) {
     const snap = await db.doc(`frames/${sender.defaultFrameId}`).get();
-    if (snap.exists) return { frame: snap.data() as CloudFrame };
+    const frame = snap.data() as CloudFrame | undefined;
+    // A default Frame that has since moved to another family must not keep receiving this sender's writes.
+    if (frame && frame.familyId === sender.familyId) return { frame };
   }
   const frames = await familyFrames(sender.familyId);
   if (frames.length === 0) return { error: 'Your family has no Frame connected yet.' };
@@ -69,6 +72,10 @@ async function handleLink(waId: string, senderProfileName: string, code: string)
     const codeSnap = await tx.get(codeRef);
     if (!codeSnap.exists) return 'That code was not found. Ask for a new one in the Family app.';
     const data = codeSnap.data() as WhatsAppLinkCode;
+    const memberSnap = await tx.get(db.doc(`families/${data.familyId}/members/${data.uid}`));
+    if ((memberSnap.data() as { status?: string } | undefined)?.status !== 'ACTIVE') {
+      return 'That code is no longer valid. Ask for a new one in the Family app.';
+    }
     if (data.used) return 'That code has already been used. Ask for a new one in the Family app.';
     if (data.expiresAt <= Date.now()) return 'That code has expired. Ask for a new one in the Family app.';
     const sender: WhatsAppSender = { waId, uid: data.uid, familyId: data.familyId, displayName: data.displayName || senderProfileName || 'Family member', defaultFrameId: null, linkedAt: Date.now(), updatedAt: Date.now() };
@@ -116,12 +123,19 @@ async function handleImageMessage(sender: WhatsAppSender, mediaId: string): Prom
   const ext = info.mimeType === 'image/png' ? 'png' : info.mimeType === 'image/webp' ? 'webp' : 'jpg';
   const storageFileId = randomUUID();
   const storagePath = `families/${sender.familyId}/photos/${frame.frameId}/${storageFileId}.${ext}`;
-  await storage.bucket().file(storagePath).save(bytes, { contentType: info.mimeType, metadata: { cacheControl: 'private, max-age=0' } });
-  await createPhotoRecordInternal({
-    familyId: sender.familyId, frameId: frame.frameId, albumId: null, storagePath,
-    filename: `whatsapp-${storageFileId}.${ext}`, mimeType: info.mimeType, size: bytes.byteLength,
-    uploadedBy: sender.uid, uploadedByName: sender.displayName, source: 'whatsapp',
-  });
+  const file = storage.bucket().file(storagePath);
+  // uploadedBy metadata lets storage.rules authorize the uploader's own later delete.
+  await file.save(bytes, { contentType: info.mimeType, metadata: { cacheControl: 'private, max-age=0', metadata: { uploadedBy: sender.uid } } });
+  try {
+    await createPhotoRecordInternal({
+      familyId: sender.familyId, frameId: frame.frameId, albumId: null, storagePath,
+      filename: `whatsapp-${storageFileId}.${ext}`, mimeType: info.mimeType, size: bytes.byteLength,
+      uploadedBy: sender.uid, uploadedByName: sender.displayName, source: 'whatsapp',
+    });
+  } catch (e) {
+    await file.delete({ ignoreNotFound: true }); // don't orphan bytes when the record is refused
+    throw e;
+  }
   return `Photo sent to ${frame.name} ✅`;
 }
 
@@ -138,16 +152,16 @@ async function handleTextMessage(waId: string, senderProfileName: string, text: 
     case 'FRAME':
       return handleFrameSelect(sender, command.name);
     case 'MAID_PRESENT_TODAY':
-      return upsertHouseholdEntry(sender.defaultFrameId ?? (await resolveDefaultOrFail(sender)), 'MAID', 'attendance', 'PRESENT').catch((e: Error) => e.message);
     case 'MAID_LEAVE_TODAY':
-      return upsertHouseholdEntry(sender.defaultFrameId ?? (await resolveDefaultOrFail(sender)), 'MAID', 'attendance', 'LEAVE').catch((e: Error) => e.message);
     case 'MILK_DELIVERED':
-      return upsertHouseholdEntry(sender.defaultFrameId ?? (await resolveDefaultOrFail(sender)), 'MILK', 'delivery', 'DELIVERED').catch((e: Error) => e.message);
     case 'MILK_SKIPPED':
-      return upsertHouseholdEntry(sender.defaultFrameId ?? (await resolveDefaultOrFail(sender)), 'MILK', 'delivery', 'NOT_DELIVERED').catch((e: Error) => e.message);
     case 'REMIND': {
-      const frameId = sender.defaultFrameId ?? (await resolveDefaultOrFail(sender));
-      return createReminder(frameId, command.time, command.message, sender.displayName);
+      const resolved = await resolveTargetFrame(sender);
+      if ('error' in resolved) return resolved.error;
+      const frameId = resolved.frame.frameId;
+      if (command.type === 'REMIND') return createReminder(frameId, command.time, command.message, sender.displayName);
+      const [type, field, value] = HOUSEHOLD_COMMANDS[command.type];
+      return upsertHouseholdEntry(frameId, type, field, value);
     }
     case 'UNKNOWN':
     default:
@@ -155,11 +169,12 @@ async function handleTextMessage(waId: string, senderProfileName: string, text: 
   }
 }
 
-async function resolveDefaultOrFail(sender: WhatsAppSender): Promise<string> {
-  const resolved = await resolveTargetFrame(sender);
-  if ('error' in resolved) throw new Error(resolved.error);
-  return resolved.frame.frameId;
-}
+const HOUSEHOLD_COMMANDS = {
+  MAID_PRESENT_TODAY: ['MAID', 'attendance', 'PRESENT'],
+  MAID_LEAVE_TODAY: ['MAID', 'attendance', 'LEAVE'],
+  MILK_DELIVERED: ['MILK', 'delivery', 'DELIVERED'],
+  MILK_SKIPPED: ['MILK', 'delivery', 'NOT_DELIVERED'],
+} as const;
 
 export const whatsappWebhook = onRequest(
   { cors: false },

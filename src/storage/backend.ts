@@ -195,9 +195,4 @@ export function getBackend(): StorageBackend {
   return backend;
 }
 
-export function resetBackendForReset(): void {
-  backend = null;
-  backendError = undefined;
-}
-
 export { ALL_STORES };

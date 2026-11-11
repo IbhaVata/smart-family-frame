@@ -10,7 +10,24 @@ import { settingsStore, toast } from '@/app/stores';
 import type { Settings } from '@/types';
 import { SAFE_REMOTE_SETTINGS_KEYS, type RemoteSettingsPatch } from '../../shared/types';
 
-let lastAppliedAt = 0;
+const LAST_APPLIED_KEY = 'sff.remoteSettings.lastAppliedAt';
+let lastAppliedAt = readLastApplied();
+
+function readLastApplied(): number {
+  try {
+    return Number(globalThis.localStorage?.getItem(LAST_APPLIED_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeLastApplied(value: number): void {
+  try {
+    globalThis.localStorage?.setItem(LAST_APPLIED_KEY, String(value));
+  } catch {
+    // Storage unavailable: worst case a remote push is re-applied after the next reload.
+  }
+}
 
 export async function watchRemoteSettings(db: Firestore, frameId: string): Promise<Unsubscribe> {
   const { doc, onSnapshot } = await import('firebase/firestore');
@@ -31,7 +48,13 @@ export async function watchRemoteSettings(db: Firestore, frameId: string): Promi
         if (typeof value === typeof current[key]) (patch as Record<string, unknown>)[key] = value;
       }
       if (Object.keys(patch).length === 0) return;
-      void updateSettings(patch).then(() => toast('Settings updated remotely.', 'info'));
+      const appliedAt = data.updatedAt;
+      updateSettings(patch)
+        .then(() => {
+          writeLastApplied(appliedAt);
+          toast('Settings updated remotely.', 'info');
+        })
+        .catch((error) => console.error('[settingsSync] failed to apply remote settings', error));
     },
     (error) => console.error('[settingsSync] listener failed', error),
   );

@@ -7,7 +7,6 @@ import type { ScreenName } from '@/App';
 import type { CloudPhoto } from '@shared/types';
 import { EmptyState } from '@/components/EmptyState';
 import { removeSharedPhoto } from '@/lib/removePhoto';
-import { useAuth } from '@/auth/useAuth';
 
 function PhotoTile({ photo, onDelete, disabled, canRemove }: { photo: CloudPhoto; onDelete: (p: CloudPhoto) => void; disabled: boolean; canRemove: boolean }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -27,8 +26,7 @@ function PhotoTile({ photo, onDelete, disabled, canRemove }: { photo: CloudPhoto
 }
 
 export function PhotosScreen({ push }: { push: (s: ScreenName) => void }) {
-  const { familyId, activeFrameId, isOwner } = useFamily();
-  const { user } = useAuth();
+  const { familyId, activeFrameId, isOwner, uid } = useFamily();
   const [photos, setPhotos] = useState<CloudPhoto[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -65,7 +63,7 @@ export function PhotosScreen({ push }: { push: (s: ScreenName) => void }) {
         <EmptyState title="No photos yet" text="Photos you and your family send appear here." />
       ) : (
         <div className="photo-grid">
-          {photos.map((p) => <PhotoTile key={p.photoId} photo={p} onDelete={(photo) => void remove(photo)} disabled={busy} canRemove={isOwner || p.uploadedBy === user?.uid} />)}
+          {photos.map((p) => <PhotoTile key={p.photoId} photo={p} onDelete={(photo) => void remove(photo)} disabled={busy} canRemove={isOwner || p.uploadedBy === uid} />)}
         </div>
       )}
       {message && <p role="status">{message}</p>}
