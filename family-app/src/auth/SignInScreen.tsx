@@ -35,7 +35,10 @@ export function SignInScreen() {
       if (stored) {
         setBusy(true);
         signInWithEmailLink(auth, stored, window.location.href)
-          .then(() => window.localStorage.removeItem(EMAIL_STORAGE_KEY))
+          .then(() => {
+            window.localStorage.removeItem(EMAIL_STORAGE_KEY);
+            clearEmailLinkFromUrl();
+          })
           .catch((e) => setError(signInErrorMessage(e, 'Sign-in link failed. Ask for a new one.')))
           .finally(() => setBusy(false));
       } else {
@@ -79,7 +82,7 @@ export function SignInScreen() {
     setBusy(true);
     setError(null);
     try {
-      await sendSignInLinkToEmail(authInstance, email.trim(), { url: window.location.origin, handleCodeInApp: true });
+      await sendSignInLinkToEmail(authInstance, email.trim(), { url: window.location.origin + window.location.pathname + window.location.search, handleCodeInApp: true });
       window.localStorage.setItem(EMAIL_STORAGE_KEY, email.trim());
       setLinkSent(true);
     } catch (e) {
@@ -94,6 +97,7 @@ export function SignInScreen() {
     setError(null);
     try {
       await signInWithEmailLink(authInstance, email.trim(), window.location.href);
+      clearEmailLinkFromUrl();
     } catch (e) {
       setError(signInErrorMessage(e, 'That did not match the link. Try again.'));
     } finally {
@@ -130,4 +134,11 @@ export function SignInScreen() {
       {error && <p className="error-text">{error}</p>}
     </div>
   );
+}
+
+/** A used sign-in link must not stay in the address bar: after a later sign-out it would be mistaken
+ *  for a fresh link. Keep only a pairing `code`, which the QR deep link needs. */
+function clearEmailLinkFromUrl() {
+  const code = new URLSearchParams(window.location.search).get('code');
+  window.history.replaceState({}, '', code ? `/pair?code=${encodeURIComponent(code)}` : '/');
 }

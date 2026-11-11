@@ -10,7 +10,7 @@ export const updateFrameSettings = onCall<{ frameId: string; patch: Record<strin
   const uid = requireUid(request);
   const frameId = String(request.data?.frameId ?? '');
   const patch = request.data?.patch ?? {};
-  if (!frameId || typeof patch !== 'object') throw new HttpsError('invalid-argument', 'frameId and patch are required.');
+  if (!frameId || typeof patch !== 'object' || patch === null || Array.isArray(patch)) throw new HttpsError('invalid-argument', 'frameId and patch are required.');
   const frame = await requireFrame(frameId);
   if (!frame.familyId) throw new HttpsError('failed-precondition', 'This Frame is not connected to a family.');
   await requireOwner(frame.familyId, uid);
@@ -24,6 +24,6 @@ export const updateFrameSettings = onCall<{ frameId: string; patch: Record<strin
     }
   }
   if (count === 0) throw new HttpsError('invalid-argument', 'No recognized settings fields were provided.');
-  await db.doc(`frames/${frameId}/remoteSettings/current`).set(safe);
+  await db.doc(`frames/${frameId}/remoteSettings/current`).set(safe, { merge: true });
   return { ok: true, appliedKeys: Object.keys(safe).filter((k) => k !== 'updatedAt' && k !== 'updatedBy') };
 });

@@ -25,7 +25,7 @@ android {
     if (storePath) {
         signingConfigs {
             stable {
-                storeFile rootProject.file(storePath).isAbsolute() ? file(storePath) : rootProject.file(storePath)
+                storeFile new File(storePath).isAbsolute() ? new File(storePath) : rootProject.file(storePath)
                 storePassword signingValue('storePassword', 'SFF_KEYSTORE_PASSWORD')
                 keyAlias signingValue('keyAlias', 'SFF_KEY_ALIAS')
                 keyPassword signingValue('keyPassword', 'SFF_KEY_PASSWORD')

@@ -67,16 +67,22 @@ export function flushHouseholdOutbox(): Promise<void> {
     const [services, identity, uid] = await Promise.all([getCloudServices(), getFrameIdentity(), ensureDeviceAuth()]);
     if (!services || !identity.familyId || !uid || identity.deviceUid !== uid) return;
     const items = (await syncQueueRepo.list()).filter(
-      (item) => item.domain === 'household' && item.direction === 'outbox' && item.status === 'pending',
+      (item) => item.domain === 'household' && item.direction === 'outbox' && item.status !== 'failed',
+      // 'syncing' here can only be left over from a crash/reload mid-flush (flushPromise serializes
+      // flushes within this page), so it is retried rather than stranded forever.
     );
     const valid = items.filter((item) => {
       const payload = item.payload as HouseholdOutboxPayload;
       return Boolean(payload?.collection && payload.docId);
     });
     if (valid.length === 0) return;
+    const stamp = Date.now();
     for (const item of valid) {
-      await syncQueueRepo.put({ ...item, status: 'syncing', updatedAt: Date.now() });
+      await syncQueueRepo.put({ ...item, status: 'syncing', updatedAt: stamp });
     }
+    // An edit saved while the call was in flight re-enqueues under the same id with a newer
+    // updatedAt; that newer item must be neither deleted on success nor overwritten on failure.
+    const unchangedSince = async (id: string) => (await syncQueueRepo.get(id))?.updatedAt === stamp;
     try {
       const { getFunctions, httpsCallable } = await import('firebase/functions');
       const call = httpsCallable<
@@ -91,10 +97,11 @@ export function flushHouseholdOutbox(): Promise<void> {
         })),
       });
       for (const item of valid) {
-        await syncQueueRepo.remove(item.id);
+        if (await unchangedSince(item.id)) await syncQueueRepo.remove(item.id);
       }
     } catch (error) {
       for (const item of valid) {
+        if (!(await unchangedSince(item.id))) continue;
         await syncQueueRepo.put({
           ...item,
           attempts: item.attempts + 1,

@@ -219,7 +219,7 @@ export async function saveHouseholdService(draft: HouseholdServiceDraft, setting
     void Promise.all([
       queueHouseholdUpsert('householdServices', service),
       queueHouseholdUpsert('householdServiceSettings', config),
-    ]);
+    ]).catch((error) => console.error('[household] failed to queue cloud sync', error));
   }
   return service;
 }
@@ -241,23 +241,23 @@ export async function deleteHouseholdService(id: string): Promise<void> {
       ...(config ? [queueHouseholdDelete('householdServiceSettings', config.id)] : []),
       ...entries.map((entry) => queueHouseholdDelete('householdEntries', entry.id)),
       ...payments.map((payment) => queueHouseholdDelete('householdPayments', payment.id)),
-    ]);
+    ]).catch((error) => console.error('[household] failed to queue cloud sync', error));
   }
 }
 export type HouseholdEntryDraft = Omit<HouseholdDailyEntry, 'id' | 'updatedAt'>;
 export async function saveHouseholdEntry(draft: HouseholdEntryDraft): Promise<HouseholdDailyEntry> {
   const id = `${draft.serviceId}:${draft.date}`;
   const entry = await householdEntryCrud.save({ ...draft, id, updatedAt: Date.now() });
-  if (isCloudConfigured()) void queueHouseholdUpsert('householdEntries', entry);
+  if (isCloudConfigured()) void queueHouseholdUpsert('householdEntries', entry).catch((error) => console.error('[household] failed to queue cloud sync', error));
   return entry;
 }
 export const deleteHouseholdEntry = async (id: string): Promise<void> => {
   await householdEntryCrud.remove(id);
-  if (isCloudConfigured()) void queueHouseholdDelete('householdEntries', id);
+  if (isCloudConfigured()) void queueHouseholdDelete('householdEntries', id).catch((error) => console.error('[household] failed to queue cloud sync', error));
 };
 export async function saveHouseholdPayment(draft: Omit<HouseholdPayment, 'id' | 'updatedAt'>): Promise<HouseholdPayment> {
   const payment = await householdPaymentCrud.save({ ...draft, id: newId(), updatedAt: Date.now() });
-  if (isCloudConfigured()) void queueHouseholdUpsert('householdPayments', payment);
+  if (isCloudConfigured()) void queueHouseholdUpsert('householdPayments', payment).catch((error) => console.error('[household] failed to queue cloud sync', error));
   return payment;
 }
 export async function saveHouseholdPaymentReminder(service: Pick<HouseholdService, 'name'>, month: string, amount: number): Promise<Reminder> {

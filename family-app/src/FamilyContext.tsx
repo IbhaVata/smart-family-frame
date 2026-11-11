@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/auth/useAuth';
 import type { CloudFrame, FamilyMember } from '@shared/types';
@@ -7,6 +7,8 @@ import type { CloudFrame, FamilyMember } from '@shared/types';
 export interface FamilyContextValue {
   uid: string | null;
   familyId: string | null;
+  /** True until we know whether the signed-in user belongs to a family. */
+  familyLoading: boolean;
   displayName: string;
   frames: CloudFrame[];
   members: FamilyMember[];
@@ -14,13 +16,13 @@ export interface FamilyContextValue {
   isOwner: boolean;
   activeFrameId: string | null;
   setActiveFrameId: (id: string) => void;
-  loading: boolean;
 }
 
 const FamilyContext = createContext<FamilyContextValue | null>(null);
 
 export function FamilyProvider({ children }: { children: ReactNode }) {
-  const { user, familyId } = useAuth();
+  const { user, familyId: rawFamilyId } = useAuth();
+  const familyId = rawFamilyId ?? null;
   const [frames, setFrames] = useState<CloudFrame[]>([]);
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [activeFrameId, setActiveFrameId] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
     () => ({
       uid: user?.uid ?? null,
       familyId,
+      familyLoading: rawFamilyId === undefined,
       displayName: user?.displayName || user?.email || 'You',
       frames,
       members,
@@ -60,9 +63,8 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
       isOwner: me?.role === 'OWNER',
       activeFrameId,
       setActiveFrameId,
-      loading: false,
     }),
-    [user, familyId, frames, members, me, activeFrameId],
+    [user, familyId, rawFamilyId, frames, members, me, activeFrameId],
   );
 
   return <FamilyContext.Provider value={value}>{children}</FamilyContext.Provider>;
@@ -72,10 +74,4 @@ export function useFamily(): FamilyContextValue {
   const ctx = useContext(FamilyContext);
   if (!ctx) throw new Error('useFamily must be used within FamilyProvider');
   return ctx;
-}
-
-/** Doc reference helper used by several screens: void if there is no active frame yet. */
-export function activeFrameDoc(frameId: string | null) {
-  if (!db || !frameId) return null;
-  return doc(db, 'frames', frameId);
 }

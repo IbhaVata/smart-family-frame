@@ -4,8 +4,9 @@ import { db } from '@/firebase';
 import { useFamily } from '@/FamilyContext';
 import type { CalendarEvent } from '@shared/types';
 import { EmptyState } from '@/components/EmptyState';
+import { localDateKey } from '@/lib/dates';
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const todayKey = () => localDateKey();
 
 export function CalendarScreen() {
   const { activeFrameId, displayName } = useFamily();

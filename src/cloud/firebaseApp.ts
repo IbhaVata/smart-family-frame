@@ -72,7 +72,13 @@ async function init(): Promise<CloudServices | null> {
 
 /** Returns the shared Firebase services, initializing lazily on first call. Never throws. */
 export function getCloudServices(): Promise<CloudServices | null> {
-  if (!servicesPromise) servicesPromise = init();
+  if (!servicesPromise) {
+    const pending = init();
+    servicesPromise = pending;
+    void pending.then((services) => {
+      if (!services && servicesPromise === pending) servicesPromise = null; // allow a later retry
+    });
+  }
   return servicesPromise;
 }
 

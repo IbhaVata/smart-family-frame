@@ -1,5 +1,8 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { wasFrameActive } from '@/frame/frameSession';
+import { getTvMode } from '@/tv/platform';
+
+const shouldAutoReload = () => wasFrameActive() || Boolean(getTvMode());
 
 interface Props {
   children: ReactNode;
@@ -32,7 +35,7 @@ export class ErrorBoundary extends Component<Props, State> {
     this.clearTimer();
     if (this.props.compact) {
       this.timer = setTimeout(this.reset, COMPACT_RETRY_MS);
-    } else if (wasFrameActive()) {
+    } else if (shouldAutoReload()) {
       this.timer = setTimeout(() => window.location.reload(), ROOT_RELOAD_MS);
     }
   }
@@ -71,7 +74,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="card stack">
           <h2>Something went wrong</h2>
           <p className="muted">{this.state.error.message}</p>
-          {wasFrameActive() && <p className="small faint">The frame will reload itself in about a minute.</p>}
+          {shouldAutoReload() && <p className="small faint">The frame will reload itself in about a minute.</p>}
           <div className="row">
             <button type="button" className="btn btn-primary" onClick={this.reset}>Try again</button>
             <button type="button" className="btn" onClick={() => window.location.reload()}>Reload</button>

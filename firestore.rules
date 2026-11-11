@@ -103,7 +103,8 @@ service cloud.firestore {
           && request.resource.data.createdBy == request.auth.uid;
         allow update: if isActiveFamilyMember(familyId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt']);
-        allow delete: if isFamilyOwner(familyId) || resource.data.createdBy == request.auth.uid;
+        allow delete: if isFamilyOwner(familyId)
+          || (isActiveFamilyMember(familyId) && resource.data.createdBy == request.auth.uid);
       }
 
       // Financial household config (rates) and payment records: OWNER-only, both read and write —

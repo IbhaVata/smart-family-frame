@@ -5,6 +5,7 @@ import { db, storage } from '@/firebase';
 import { useFamily } from '@/FamilyContext';
 import type { ScreenName } from '@/App';
 import type { CloudPhoto, CalendarEvent, Note } from '@shared/types';
+import { localDateKey } from '@/lib/dates';
 
 function useRecentPhotos(familyId: string | null, frameId: string | null) {
   const [photos, setPhotos] = useState<CloudPhoto[]>([]);
@@ -39,7 +40,7 @@ function useNextEvent(frameId: string | null) {
       setEvent(null);
       return;
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateKey();
     const q = query(collection(db, 'frames', frameId, 'calendarEvents'), where('date', '>=', today), orderBy('date', 'asc'), limit(1));
     return onSnapshot(q, (snap) => setEvent(snap.empty ? null : (snap.docs[0]!.data() as CalendarEvent)), () => setEvent(null));
   }, [frameId]);

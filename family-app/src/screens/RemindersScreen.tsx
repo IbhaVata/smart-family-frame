@@ -4,9 +4,10 @@ import { db } from '@/firebase';
 import { useFamily } from '@/FamilyContext';
 import type { Reminder, RepeatRule } from '@shared/types';
 import { EmptyState } from '@/components/EmptyState';
+import { localDateKey } from '@/lib/dates';
 
 const REPEATS: RepeatRule[] = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const todayKey = () => localDateKey();
 
 export function RemindersScreen() {
   const { activeFrameId } = useFamily();

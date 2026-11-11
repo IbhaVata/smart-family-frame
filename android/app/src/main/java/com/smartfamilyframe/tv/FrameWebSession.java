@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -63,6 +64,16 @@ final class FrameWebSession {
             }
             @Override public void onPageStarted(WebView view, String url, Bitmap icon) {
                 if (!isLocalDocument(Uri.parse(url))) view.stopLoading();
+            }
+            // Without this, a renderer crash or low-memory kill (likely on a TV left running for days)
+            // kills the whole app process. Drop the dead view and start a fresh renderer instead.
+            @Override public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                if (current.get() != view) return true;
+                dispose();
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    if (owner.get() == null && current.get() == null) attach(host, context, container, mode, actions);
+                });
+                return true;
             }
         });
         web.addJavascriptInterface(new Bridge(host, mode, actions), "SmartFrameAndroid");

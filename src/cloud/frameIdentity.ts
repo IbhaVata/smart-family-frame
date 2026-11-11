@@ -30,6 +30,9 @@ export function getFrameIdentity(): Promise<FrameIdentity> {
       await frameIdentityRepo.save(fresh);
       return fresh;
     })();
+    loaded.catch(() => {
+      loaded = null; // a transient IndexedDB error at boot must not break pairing/sync until reload
+    });
   }
   return loaded;
 }

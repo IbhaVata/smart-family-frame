@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/auth/useAuth';
+import { AuthProvider, useAuth } from '@/auth/useAuth';
 import { SignInScreen } from '@/auth/SignInScreen';
 import { FamilyProvider, useFamily } from '@/FamilyContext';
 import { HomeScreen } from '@/screens/HomeScreen';
@@ -46,7 +46,7 @@ function readCodeFromUrl(): string | null {
 }
 
 function AppShell() {
-  const { familyId } = useFamily();
+  const { familyId, familyLoading } = useFamily();
   const [stack, setStack] = useState<ScreenName[]>(['home']);
   const current = stack[stack.length - 1]!;
 
@@ -62,6 +62,8 @@ function AppShell() {
   const goTab = (screen: ScreenName) => setStack([screen]);
 
   const isTab = TABS.some((t) => t.id === current);
+
+  if (familyLoading) return <LoadingScreen />;
 
   if (!familyId && current !== 'pairFrame') {
     return <PairFrameScreen onDone={() => goTab('home')} initialCode={readCodeFromUrl()} />;
@@ -89,7 +91,7 @@ function AppShell() {
         {current === 'members' && <MembersScreen push={push} />}
         {current === 'frames' && <FramesScreen push={push} />}
         {current === 'settings' && <SettingsScreen push={push} />}
-        {current === 'pairFrame' && <PairFrameScreen onDone={pop} initialCode={readCodeFromUrl()} />}
+        {current === 'pairFrame' && <PairFrameScreen onDone={() => (stack.length > 1 ? pop() : goTab('home'))} initialCode={readCodeFromUrl()} />}
       </main>
       <nav className="bottom-nav">
         {TABS.map((t) => (
@@ -103,16 +105,26 @@ function AppShell() {
   );
 }
 
+function LoadingScreen() {
+  return (
+    <div className="signin-screen" role="status" aria-live="polite">
+      <h1>Smart Family</h1>
+      <p className="muted">Opening your family frame…</p>
+    </div>
+  );
+}
+
 export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
+  );
+}
+
+function AuthGate() {
   const { loading, user } = useAuth();
-  if (loading) {
-    return (
-      <div className="signin-screen" role="status" aria-live="polite">
-        <h1>Smart Family</h1>
-        <p className="muted">Opening your family frame…</p>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen />;
   if (!user) return <SignInScreen />;
   return (
     <FamilyProvider>

@@ -90,7 +90,6 @@ export const claimPairingCode = onCall<{ code: string; displayName?: string }>(a
 
     let familyId: string;
     let familyName: string;
-    let joiningAsNewMember = false;
 
     if (frame.familyId) {
       // Someone is already connected to this Frame; the claimer joins that same family.
@@ -101,13 +100,12 @@ export const claimPairingCode = onCall<{ code: string; displayName?: string }>(a
       const memberRef = db.doc(`families/${familyId}/members/${uid}`);
       const memberSnap = await tx.get(memberRef);
       if (!memberSnap.exists) {
-        joiningAsNewMember = true;
         const member: FamilyMember = { uid, role: 'MEMBER', displayName, status: 'ACTIVE', joinedAt: Date.now(), updatedAt: Date.now() };
         tx.set(memberRef, member);
       } else if ((memberSnap.data() as FamilyMember).status === 'REVOKED') {
-        // Re-claiming a code after revocation re-activates membership — an explicit owner action (sharing
-        // a fresh code) is required to get here, so this is an intentional re-invite, not a bypass.
-        tx.update(memberRef, { status: 'ACTIVE', updatedAt: Date.now() });
+        // Codes are minted by the Frame device, not the owner, so anyone who can see the screen could
+        // otherwise undo the owner's revocation. Re-admitting a revoked member stays an owner decision.
+        throw new HttpsError('permission-denied', 'Your access to this family was removed. Ask the family owner to restore it.');
       }
     } else if (existingFamilyId) {
       const memberRef = db.doc(`families/${existingFamilyId}/members/${uid}`);
@@ -131,13 +129,11 @@ export const claimPairingCode = onCall<{ code: string; displayName?: string }>(a
       tx.set(db.doc(`families/${familyId}/members/${uid}`), member);
       tx.update(frameRef, { familyId, familyName, ownerUid: uid, updatedAt: Date.now() });
       tx.set(db.doc(`frameDeviceIndex/${frame.deviceUid}`), { deviceUid: frame.deviceUid, frameId: codeData.frameId, familyId });
-      joiningAsNewMember = true;
     }
 
     tx.set(userRef, { uid, familyId, displayName, updatedAt: Date.now() }, { merge: true });
     tx.update(codeRef, { used: true, usedBy: uid, usedAt: Date.now() });
 
-    void joiningAsNewMember; // reserved for a future "member joined" notification — not sent in V1 of V2 to keep WhatsApp/email costs at zero by default
     return { frameId: codeData.frameId, frameName: frame.name, familyId, familyName };
   });
 });

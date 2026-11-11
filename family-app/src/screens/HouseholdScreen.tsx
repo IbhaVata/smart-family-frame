@@ -4,11 +4,12 @@ import { db } from '@/firebase';
 import { useFamily } from '@/FamilyContext';
 import { getHouseholdSummary } from '@/lib/api';
 import { EmptyState } from '@/components/EmptyState';
+import { localDateKey, localMonthKey } from '@/lib/dates';
 
 type Summary = Awaited<ReturnType<typeof getHouseholdSummary>>;
 
-const monthKey = () => new Date().toISOString().slice(0, 7);
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const monthKey = () => localMonthKey();
+const todayKey = () => localDateKey();
 
 export function HouseholdScreen() {
   const { activeFrameId } = useFamily();
