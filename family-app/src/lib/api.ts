@@ -10,6 +10,8 @@ function fn<Req, Res>(name: string) {
 }
 
 export const claimPairingCode = fn<{ code: string; displayName?: string }, { frameId: string; frameName: string; familyId: string; familyName: string }>('claimPairingCode');
+export const createFamilyInvite = fn<{ familyId: string }, { token: string; familyName: string; expiresAt: number }>('createFamilyInvite');
+export const claimFamilyInvite = fn<{ token: string; displayName?: string }, { familyId: string; familyName: string; alreadyMember: boolean }>('claimFamilyInvite');
 export const revokeMember = fn<{ familyId: string; memberUid: string }, { ok: true }>('revokeMember');
 export const disconnectFrame = fn<{ frameId: string }, { ok: true }>('disconnectFrame');
 export const createPhotoRecord = fn<

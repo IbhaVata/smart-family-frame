@@ -14,6 +14,8 @@ import { MembersScreen } from '@/screens/MembersScreen';
 import { FramesScreen } from '@/screens/FramesScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { PairFrameScreen } from '@/screens/PairFrameScreen';
+import { JoinFamilyScreen } from '@/screens/JoinFamilyScreen';
+import { readInviteFromUrl } from '@/lib/invite';
 
 export type ScreenName = 'home' | 'photos' | 'sendPhotos' | 'albums' | 'calendar' | 'notes' | 'reminders' | 'household' | 'members' | 'frames' | 'settings' | 'pairFrame';
 
@@ -48,6 +50,7 @@ function readCodeFromUrl(): string | null {
 function AppShell() {
   const { familyId, familyLoading } = useFamily();
   const [stack, setStack] = useState<ScreenName[]>(['home']);
+  const [inviteToken, setInviteToken] = useState(readInviteFromUrl);
   const current = stack[stack.length - 1]!;
 
   useEffect(() => {
@@ -62,6 +65,9 @@ function AppShell() {
   const goTab = (screen: ScreenName) => setStack([screen]);
 
   const isTab = TABS.some((t) => t.id === current);
+
+  // An invite link wins over everything else, including "no family yet": joining is the point.
+  if (inviteToken) return <JoinFamilyScreen token={inviteToken} onDone={() => { setInviteToken(null); goTab('home'); }} />;
 
   if (familyLoading) return <LoadingScreen />;
 

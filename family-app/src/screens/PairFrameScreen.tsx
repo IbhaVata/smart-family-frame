@@ -51,7 +51,7 @@ export function PairFrameScreen({ onDone, initialCode }: { onDone: () => void; i
       <main className="app-main" style={{ paddingTop: 40 }}>
         <div className="card">
           <h2 style={{ textTransform: 'none', color: 'var(--ink)', fontSize: 20 }}>Connect a Frame</h2>
-          <p className="muted">Find the 6-digit code under Settings → Remote sharing on the Frame, and enter it below. Scanning the Frame's QR code with your phone's camera app fills this in automatically.</p>
+          <p className="muted">Enter the 6-digit code shown on the TV, or scan the TV's QR code with your phone camera.</p>
           <input
             className="input"
             inputMode="numeric"

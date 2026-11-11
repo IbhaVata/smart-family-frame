@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
 import { auth, firebaseConfigured } from '@/firebase';
+import { readInviteFromUrl } from '@/lib/invite';
 
 const EMAIL_STORAGE_KEY = 'sff.pendingSignInEmail';
 
@@ -120,7 +121,11 @@ export function SignInScreen() {
   return (
     <div className="signin-screen">
       <h1>Smart Family</h1>
-      <p className="muted">Sign in to send photos and manage your family's Smart Frame.</p>
+      <p className="muted">
+        {readInviteFromUrl()
+          ? "You've been invited to join a family's Smart Frame. Sign in once to start sending photos to their TV."
+          : "Sign in to send photos and manage your family's Smart Frame."}
+      </p>
       <button className="btn btn-primary btn-block" disabled={busy} onClick={() => void signInGoogle()}>Continue with Google</button>
       <div className="signin-divider">or</div>
       {linkSent ? (
@@ -137,8 +142,11 @@ export function SignInScreen() {
 }
 
 /** A used sign-in link must not stay in the address bar: after a later sign-out it would be mistaken
- *  for a fresh link. Keep only a pairing `code`, which the QR deep link needs. */
+ *  for a fresh link. Keep only a pairing `code` or family `invite`, which the deep links need. */
 function clearEmailLinkFromUrl() {
-  const code = new URLSearchParams(window.location.search).get('code');
-  window.history.replaceState({}, '', code ? `/pair?code=${encodeURIComponent(code)}` : '/');
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const invite = params.get('invite');
+  const next = invite ? `/join?invite=${encodeURIComponent(invite)}` : code ? `/pair?code=${encodeURIComponent(code)}` : '/';
+  window.history.replaceState({}, '', next);
 }

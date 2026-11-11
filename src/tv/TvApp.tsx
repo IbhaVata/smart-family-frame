@@ -3,6 +3,7 @@ import { useStore } from '@/app/store';
 import { activeRemindersStore, eventsStore, notesStore, photosStore, remindersStore, schedulesStore, settingsStore, statusStore } from '@/app/stores';
 import { FrameContent, useFrameResolution } from '@/frame/FrameContent';
 import { RemoteSharingSection } from '@/settings/RemoteSharingSection';
+import { ConnectPhonePrompt } from '@/settings/ConnectPhonePrompt';
 import { updateSettings } from '@/services/dataService';
 import { loadDemoData } from '@/services/demoData';
 import { FRAME_MODES, type FrameModeKind } from '@/types';
@@ -107,6 +108,7 @@ export function TvApp() {
           {status.storageError && <p role="alert" className="tv-error">Stored content could not be read: {status.storageError}. Open the app again before changing settings.</p>}
           {page === 'home' && <>
             <p className="tv-intro">Your photos, calendar and family updates, together on your TV.</p>
+            <ConnectPhonePrompt className="tv-connect" />
             <div className="tv-actions">
               <button disabled={!!status.storageError} onClick={() => void updateSettings({ setupComplete: true }).then(() => { setOverride(null); setPage('display'); }).catch(() => setError('Could not start the frame.'))}><strong>Start frame</strong><span>Show your photos and family dashboard</span></button>
               <button onClick={() => setPage('pair')}><strong>Connect phone</strong><span>Pair this TV and send family content</span></button>
